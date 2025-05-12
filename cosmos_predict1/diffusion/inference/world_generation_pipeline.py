@@ -20,6 +20,7 @@ from typing import Any, Optional
 import einops
 import numpy as np
 import torch
+from megatron.core import parallel_state
 
 from cosmos_predict1.diffusion.inference.inference_utils import (
     generate_world_from_text,
@@ -52,7 +53,7 @@ from cosmos_predict1.diffusion.prompt_upsampler.video2world_prompt_upsampler_inf
     run_chat_completion as run_chat_completion_vlm,
 )
 from cosmos_predict1.diffusion.training.utils.inference_long_video import generate_video_from_batch_with_loop
-from cosmos_predict1.utils import log
+from cosmos_predict1.utils import distributed, log
 from cosmos_predict1.utils.base_world_generation_pipeline import BaseWorldGenerationPipeline
 
 MODEL_NAME_DICT = {
@@ -183,6 +184,10 @@ class DiffusionText2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}")
         else:
             load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}/model.pt")
+
+        if distributed.get_world_size() > 1:
+            process_group = parallel_state.get_context_parallel_group()
+            self.model.net.enable_context_parallel(process_group)
 
     def _load_tokenizer(self):
         load_tokenizer_model(self.model, f"{self.checkpoint_dir}/Cosmos-Tokenize1-CV8x8x8-720p")
@@ -640,6 +645,7 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
                 Final prompt used for generation (may be enhanced)
             ), or None if content fails guardrail safety checks
         """
+
         log.info(f"Run with image or video path: {image_or_video_path}")
         log.info(f"Run with negative prompt: {negative_prompt}")
         log.info(f"Run with prompt upsampler: {self.enable_prompt_upsampler}")
@@ -658,7 +664,6 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
             log.info(f"Pass guardrail on {'upsampled' if self.enable_prompt_upsampler else 'text'} prompt")
         else:
             log.info("Not running guardrail")
-
 
         log.info("Run text embedding on prompt")
         if negative_prompt:
