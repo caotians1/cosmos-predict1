@@ -40,7 +40,6 @@ from cosmos_predict1.diffusion.model.model_v2w import DiffusionV2WModel
 from cosmos_predict1.diffusion.model.model_v2w_multiview import DiffusionMultiviewV2WModel
 from cosmos_predict1.diffusion.model.model_view_extend_multiview import DiffusionMultiviewViewExtendModel
 from cosmos_predict1.diffusion.model.model_world_interpolator import DiffusionWorldInterpolatorWModel
-
 from cosmos_predict1.diffusion.prompt_upsampler.text2world_prompt_upsampler_inference import (
     create_prompt_upsampler,
     run_chat_completion,
@@ -664,6 +663,7 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
             log.info(f"Pass guardrail on {'upsampled' if self.enable_prompt_upsampler else 'text'} prompt")
         else:
             log.info("Not running guardrail")
+
 
         log.info("Run text embedding on prompt")
         if negative_prompt:
@@ -1475,7 +1475,6 @@ class DiffusionWorldInterpolatorGenerationPipeline(DiffusionVideo2WorldGeneratio
 
 
 class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultiviewGenerationPipeline):
-
     def _load_model(self):
         self.model = load_model_by_config(
             config_job_name=self.model_name,
@@ -1516,7 +1515,7 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
             seed=self.seed,
             condition_latent=condition_latent,
             num_input_frames=self.num_input_frames,
-            augment_sigma=0.
+            augment_sigma=0.0,
         )
 
         return video
@@ -1532,12 +1531,13 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
     def _mix_condition_latents(self, state_shape, view_condition_latent, initial_condition_latent) -> torch.Tensor:
         if initial_condition_latent is None:
             initial_condition_latent = torch.zeros(state_shape, dtype=torch.bfloat16).unsqueeze(0).cuda()
-        initial_condition_latent = einops.rearrange(initial_condition_latent, "B C (V T) H W -> B C V T H W", V=self.model.n_views)
-        for k,v in view_condition_latent.items():
-            initial_condition_latent[:,:,k] = v
+        initial_condition_latent = einops.rearrange(
+            initial_condition_latent, "B C (V T) H W -> B C V T H W", V=self.model.n_views
+        )
+        for k, v in view_condition_latent.items():
+            initial_condition_latent[:, :, k] = v
         initial_condition_latent = einops.rearrange(initial_condition_latent, "B C V T H W -> B C (V T) H W ")
         return initial_condition_latent
-
 
     def _run_model_with_offload(
         self,
@@ -1545,7 +1545,7 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
         condition_location: str,
         view_condition_video_path: str,
         initial_condition_video_path: str,
-        view_cond_start_frame: int=0
+        view_cond_start_frame: int = 0,
     ) -> np.ndarray:
         """Generate world representation with automatic model offloading.
 
@@ -1590,7 +1590,7 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
                         input_image_or_video_path=os.path.join(view_condition_video_path, fname),
                         num_input_frames=self.num_video_frames,
                         from_back=False,
-                        start_frame=view_cond_start_frame
+                        start_frame=view_cond_start_frame,
                     )
                     view_condition_latents[input_view_id] = condition_latent
                     log.info(f"read {condition_latent.shape} shaped latent from view_condition_video_path/{fname}")
@@ -1601,13 +1601,14 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
                 input_image_or_video_path=view_condition_video_path,
                 num_input_frames=self.num_video_frames,
                 from_back=False,
-                start_frame=view_cond_start_frame
+                start_frame=view_cond_start_frame,
             )
             view_condition_latents[requisite_input_views[0]] = condition_latent
             log.info(f"read {condition_latent.shape} shaped latent from {view_condition_video_path}")
 
-        assert set(view_condition_latents.keys()).issuperset(set(requisite_input_views)) , \
-            f"Not all views required by condition location, are found in {view_condition_video_path}. Views required:  {requisite_input_views}, views found:  {set(view_condition_latents.keys())}"
+        assert set(view_condition_latents.keys()).issuperset(
+            set(requisite_input_views)
+        ), f"Not all views required by condition location, are found in {view_condition_video_path}. Views required:  {requisite_input_views}, views found:  {set(view_condition_latents.keys())}"
 
         if "first_n" in condition_location:
             assert initial_condition_video_path is not None
@@ -1626,10 +1627,12 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
                             model=self.model,
                             input_image_or_video_path=os.path.join(initial_condition_video_path, fname),
                             num_input_frames=self.num_input_frames,
-                            from_back=True
+                            from_back=True,
                         )
                         initial_condition_latents.append(condition_latent)
-                        log.info(f"read {condition_latent.shape} shaped latent from initial_condition_video_path/{fname}")
+                        log.info(
+                            f"read {condition_latent.shape} shaped latent from initial_condition_video_path/{fname}"
+                        )
                 assert len(initial_condition_latents) == self.model.n_views
                 initial_condition_latents = torch.cat(initial_condition_latents, dim=2)
             else:
@@ -1638,7 +1641,7 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
                     model=self.model,
                     input_image_or_video_path=initial_condition_video_path,
                     num_input_frames=self.num_input_frames,
-                )   # B C (VT) H W
+                )  # B C (VT) H W
 
                 log.info(f"read {initial_condition_latents.shape} shaped latent from {initial_condition_video_path}")
         else:
@@ -1667,7 +1670,7 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
         condition_location: str,
         view_condition_video_path: str,
         initial_condition_video_path: str = None,
-        view_cond_start_frame: int=0
+        view_cond_start_frame: int = 0,
     ) -> tuple[np.ndarray, str] | None:
         """Generate video from text prompt with optional negative prompt guidance.
 
@@ -1703,9 +1706,8 @@ class DiffusionViewExtendMultiviewGenerationPipeline(DiffusionVideo2WorldMultivi
             condition_location,
             view_condition_video_path,
             initial_condition_video_path,
-            view_cond_start_frame
+            view_cond_start_frame,
         )
         log.info("Finish generation")
 
         return video, prompt
-
