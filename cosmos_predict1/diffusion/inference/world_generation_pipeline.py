@@ -81,8 +81,8 @@ MODEL_NAME_DICT = {
     "Cosmos-Predict1-7B-Text2World-Sample-AV-Multiview": "Cosmos_Predict1_Text2World_7B_Multiview",
     "Cosmos-Predict1-7B-Video2World-Sample-AV-Multiview": "Cosmos_Predict1_Video2World_7B_Multiview",
     "Cosmos-Predict1-7B-WorldInterpolator": "Cosmos_Predict1_WorldInterpolator_7B",
-    "Cosmos-Predict1-7B-Text2World-Sample-AV-SingleToMultiView": "Cosmos_Predict1_Video2World_7B_ViewExtend_Multiview",
-    "Cosmos-Predict1-7B-Video2World-Sample-AV-SingleToMultiView": "Cosmos_Predict1_Video2World_7B_ViewExtend_Multiview",
+    "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/t2w_model.pt": "Cosmos_Predict1_Video2World_7B_ViewExtend_Multiview",
+    "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/v2w_model.pt": "Cosmos_Predict1_Video2World_7B_ViewExtend_Multiview",
 }
 
 
@@ -179,7 +179,10 @@ class DiffusionText2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         )
 
     def _load_network(self):
-        load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}/model.pt")
+        if self.checkpoint_name.endswith(".pt"):
+            load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}")
+        else:
+            load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}/model.pt")
 
     def _load_tokenizer(self):
         load_tokenizer_model(self.model, f"{self.checkpoint_dir}/Cosmos-Tokenize1-CV8x8x8-720p")
