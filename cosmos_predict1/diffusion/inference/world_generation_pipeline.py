@@ -56,11 +56,13 @@ from cosmos_predict1.diffusion.prompt_upsampler.video2world_prompt_upsampler_inf
 from cosmos_predict1.diffusion.prompt_upsampler.video2world_prompt_upsampler_inference import (
     run_chat_completion as run_chat_completion_vlm,
 )
+
 from cosmos_predict1.diffusion.training.utils.inference_long_video import (
     generate_video_from_batch_with_loop,
     switch_config_for_inference,
 )
 from cosmos_predict1.diffusion.utils.dataset_utils import Resize_Preprocess, ToTensorVideo
+
 from cosmos_predict1.utils import distributed, log
 from cosmos_predict1.utils.base_world_generation_pipeline import BaseWorldGenerationPipeline
 
@@ -90,6 +92,7 @@ MODEL_NAME_DICT = {
     "Cosmos-Predict1-7B-Text2World-Sample-AV-Multiview": "Cosmos_Predict1_Text2World_7B_Multiview",
     "Cosmos-Predict1-7B-Video2World-Sample-AV-Multiview": "Cosmos_Predict1_Video2World_7B_Multiview",
     "Cosmos-Predict1-7B-WorldInterpolator": "Cosmos_Predict1_WorldInterpolator_7B",
+    # single2multiview
     "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/t2w_model.pt": "Cosmos_Predict1_Video2World_7B_ViewExtend_Multiview",
     "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/v2w_model.pt": "Cosmos_Predict1_Video2World_7B_ViewExtend_Multiview",
     # video2world action-conditioned
@@ -675,7 +678,6 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
             log.info(f"Pass guardrail on {'upsampled' if self.enable_prompt_upsampler else 'text'} prompt")
         else:
             log.info("Not running guardrail")
-
 
         log.info("Run text embedding on prompt")
         if negative_prompt:

@@ -19,6 +19,7 @@ import os
 import torch
 from megatron.core import parallel_state
 
+
 from cosmos_predict1.diffusion.inference.inference_utils import (
     add_common_arguments,
     remove_argument
@@ -56,7 +57,8 @@ def parse_arguments() -> argparse.Namespace:
         default="Cosmos-Predict1-7B-Single2Multiview-Sample-AV/t2w_model.pt",
         help="DiT model weights directory name relative to checkpoint_dir",
         choices=[
-            "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/t2w_model.pt", "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/v2w_model.pt"
+            "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/t2w_model.pt", 
+            "Cosmos-Predict1-7B-Single2Multiview-Sample-AV/v2w_model.pt"
         ],
     )
     parser.add_argument(
@@ -166,7 +168,7 @@ def demo(args):
     """
     misc.set_random_seed(args.seed)
     inference_type = "video2world"
-    #validate_args(args, inference_type)
+    # validate_args(args, inference_type)
 
     if args.num_gpus > 1:
         distributed.init()
