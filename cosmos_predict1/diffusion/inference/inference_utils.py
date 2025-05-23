@@ -24,13 +24,11 @@ import numpy as np
 import omegaconf.errors
 import torch
 import torchvision.transforms.functional as transforms_F
-from omegaconf import OmegaConf
 
 from cosmos_predict1.diffusion.model.model_t2w import DiffusionT2WModel
 from cosmos_predict1.diffusion.model.model_v2w import DiffusionV2WModel
+from cosmos_predict1.diffusion.model.model_v2w_action import DiffusionActionV2WModel
 from cosmos_predict1.diffusion.model.model_v2w_multiview import DiffusionMultiviewV2WModel
-from cosmos_predict1.diffusion.model.model_world_interpolator import DiffusionWorldInterpolatorWModel
-from cosmos_predict1.diffusion.training.models.extend_model import ExtendDiffusionModel
 from cosmos_predict1.utils import log
 from cosmos_predict1.utils.config_helper import get_config_module, override
 from cosmos_predict1.utils.io import load_from_fileobj
@@ -184,13 +182,14 @@ def validate_args(args: argparse.Namespace, inference_type: str) -> None:
     assert inference_type in [
         "text2world",
         "video2world",
+        "video2world_action",
         "world_interpolator",
     ], "Invalid inference_type, must be 'text2world' or 'video2world'"
 
     # Validate prompt/image/video args for single or batch generation
     if inference_type == "text2world" or (inference_type == "video2world" and args.disable_prompt_upsampler):
         assert args.prompt or args.batch_input_path, "--prompt or --batch_input_path must be provided."
-    if (inference_type == "video2world" or inference_type == "world_interpolator") and not args.batch_input_path:
+    if inference_type in ("video2world", "video2world_action", "world_interpolator") and not args.batch_input_path:
         assert (
             args.input_image_or_video_path
         ), "--input_image_or_video_path must be provided for single video generation."
@@ -301,7 +300,7 @@ def skip_init_linear():
 
 def load_model_by_config(
     config_job_name,
-    config_file="projects/cosmos_video/config/config.py",
+    config_file="cosmos_predict1/diffusion/config/config.py",
     model_class=DiffusionT2WModel,
 ):
     config_module = get_config_module(config_file)
@@ -337,7 +336,7 @@ def load_network_model(model: DiffusionT2WModel, ckpt_path: str):
             net_state_dict = model_state_dict
         else:
             net_state_dict = model_state_dict
-    
+
     log.debug(non_strict_load_model(model.model, net_state_dict))
     model.cuda()
 
@@ -544,7 +543,7 @@ def generate_world_from_video(
     seed: int,
     condition_latent: torch.Tensor,
     num_input_frames: int,
-    augment_sigma: Optional[float]=None,
+    augment_sigma: Optional[float] = None,
 ) -> Tuple[np.array, list, list]:
     """Generate video using a conditioning video/image input.
 
@@ -760,8 +759,10 @@ def create_condition_latent_from_input_frames(
         # treat as single view video
         latent = model.tokenizer.encode(encode_input_frames) * model.sigma_data
     else:
-        raise ValueError(f"First dimension of encode_input_frames {encode_input_frames.shape[0]} does not match "
-                         f"model.n_views or model.n_views is not defined and first dimension is not 1")
+        raise ValueError(
+            f"First dimension of encode_input_frames {encode_input_frames.shape[0]} does not match "
+            f"model.n_views or model.n_views is not defined and first dimension is not 1"
+        )
     return latent, encode_input_frames
 
 
@@ -801,7 +802,7 @@ def get_condition_latent(
     frame_index: int = 0,
     frame_stride: int = 1,
     from_back: bool = True,
-    start_frame: int=0
+    start_frame: int = 0,
 ) -> torch.Tensor:
     """Get condition latent from input image/video file.
 
@@ -848,11 +849,19 @@ def get_condition_latent(
         condition_latent = condition_latent.to(torch.bfloat16)
         return condition_latent
     input_frames = input_frames[:, :, start_frame:, :, :]
-    condition_latent, _ = create_condition_latent_from_input_frames(model, input_frames, num_input_frames,
-                                                                    from_back=from_back)
+    condition_latent, _ = create_condition_latent_from_input_frames(
+        model, input_frames, num_input_frames, from_back=from_back
+    )
     condition_latent = condition_latent.to(torch.bfloat16)
 
     return condition_latent
+
+
+def get_condition_latent_action(
+    model: DiffusionActionV2WModel, data_batch: dict, num_of_latent_overlap: int
+) -> torch.Tensor:
+    _, x0, _ = model.get_data_and_condition(data_batch, num_condition_t=num_of_latent_overlap)
+    return x0
 
 
 def get_condition_latent_multiview(
@@ -861,7 +870,7 @@ def get_condition_latent_multiview(
     num_input_frames: int = 1,
     state_shape: list[int] = None,
     from_back: bool = True,
-    start_frame: int=0
+    start_frame: int = 0,
 ):
     """Get condition latent from input image/video file. This is the function for the multi-view model where each view has one latent condition frame.
 
@@ -891,8 +900,10 @@ def get_condition_latent_multiview(
         W=W,
     )
     input_frames = einops.rearrange(input_frames, "B C (V T) H W -> (B V) C T H W", V=model.n_views)
-    input_frames = input_frames[:,:,start_frame:,:,:]
-    condition_latent, _ = create_condition_latent_from_input_frames(model, input_frames, num_input_frames, from_back=from_back)
+    input_frames = input_frames[:, :, start_frame:, :, :]
+    condition_latent, _ = create_condition_latent_from_input_frames(
+        model, input_frames, num_input_frames, from_back=from_back
+    )
     condition_latent = condition_latent.to(torch.bfloat16)
 
     return condition_latent, einops.rearrange(input_frames, "(B V) C T H W -> B C (V T) H W", V=model.n_views)[0]
